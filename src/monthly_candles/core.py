@@ -7,6 +7,8 @@ import polars as pl
 import requests
 from dateutil.relativedelta import relativedelta
 
+__all__ = ["fetch"]  # Expose only the fetch function
+
 _BASE_URL = "https://data.binance.vision/data/spot/monthly/klines"
 
 _SCHEMA = {
@@ -91,7 +93,7 @@ def _csv_to_dataframe(csv_file: io.TextIOWrapper) -> pl.DataFrame:
     """
     df = pl.read_csv(csv_file, has_header=False, schema=_SCHEMA)
     df = df.with_columns(pl.col("timestamp").cast(pl.Datetime("ms")))
-    return df.select(_COLUMNS)  # Keep OHLCHV columns only
+    return df.select(_COLUMNS)  # Keep OHLCV columns only
 
 
 def _add_missing_timestamps(

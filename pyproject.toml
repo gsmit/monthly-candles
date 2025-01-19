@@ -1,7 +1,7 @@
 [project]
 name = "monthly-candles"
 version = "0.1.0"
-description = "Add your description here"
+description = "A simple Python library to download monthly OHLCV data from Binance"
 readme = "README.md"
 authors = [
     { name = "Gijs Smit" }
