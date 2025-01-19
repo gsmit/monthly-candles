@@ -1,5 +1,5 @@
 # 🕯️ Monthly Candles
-A lightweight Python library for retrieving historical monthly OHLCV data from Binance. The candle data is sourced from Binance's public market data repository, available at https://data.binance.vision/. Retrieved candles are returned as a Polars DataFrame, enabling seamless analysis and further data processing.
+A lightweight Python library for retrieving historical monthly OHLCV data from Binance. The candle data is sourced from Binance's public spot market data repository, available at https://data.binance.vision/. Retrieved candles are returned as a Polars DataFrame, enabling seamless analysis and further data processing.
 
 ## Example Usage
 To fetch some candles, simply run the following:
