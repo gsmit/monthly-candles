@@ -89,7 +89,7 @@ def _csv_to_dataframe(csv_file: io.TextIOWrapper) -> pl.DataFrame:
         csv_file (io.TextIOWrapper): A file-like object for the CSV file.
 
     Returns:
-        pl.DataFrame: The CSV data as a Polars DataFrame.
+        pl.DataFrame: The OHLCV data as a Polars DataFrame.
     """
     df = pl.read_csv(csv_file, has_header=False, schema=_SCHEMA)
     df = df.with_columns(pl.col("timestamp").cast(pl.Datetime("ms")))
@@ -140,7 +140,7 @@ def _fetch_monthly_candles(
         month (str): The month in "YYYY-MM" format (e.g., "2024-12").
 
     Returns:
-        pl.DataFrame: The CSV data as a Polars DataFrame.
+        pl.DataFrame: The OHLCV data as a Polars DataFrame.
     """
     url = _construct_url(symbol, timeframe, month)
     zip_content = _download_zip_file(url)
@@ -180,7 +180,18 @@ def fetch(
     start: str,
     end: Optional[str] = None,
 ) -> pl.DataFrame:
-    """Returns multiple months of candles as a Polars DataFrame."""
+    """Returns multiple months of candles as a Polars DataFrame.
+
+    Args:
+        symbol (str): The trading pair symbol (e.g., "BTCUSDT").
+        timeframe (str): The timeframe (e.g., "1m").
+        start (str): Start month in "YYYY-MM" format (e.g., "2023-01").
+        end (Optional[str]): End month in "YYYY-MM" format (e.g., "2023-12").
+            If None, only the start month is returned.
+
+    Returns:
+        pl.DataFrame: The OHLCV data as a Polars DataFrame.
+    """
     data = [
         _fetch_monthly_candles(symbol, timeframe, month)
         for month in _get_months(start, end)
