@@ -1,1 +1,5 @@
+# Bytecode and temporary Python files
 __pycache__/
+
+# Caches and application-specific data
+.monthly_candles/
