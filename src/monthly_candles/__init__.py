@@ -1,1 +1,1 @@
-from .core import fetch
+from .core import clear_cache, fetch

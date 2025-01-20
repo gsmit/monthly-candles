@@ -1,4 +1,6 @@
 import io
+import os
+import shutil
 import zipfile
 from datetime import datetime
 from typing import Optional
@@ -7,9 +9,11 @@ import polars as pl
 import requests
 from dateutil.relativedelta import relativedelta
 
-__all__ = ["fetch"]  # Expose only the fetch function
+__all__ = ["clear_cache", "fetch"]
 
 _BASE_URL = "https://data.binance.vision/data/spot/monthly/klines"
+
+_CACHE_DIR = ".monthly_candles"
 
 _SCHEMA = {
     "timestamp": pl.Int64,
@@ -97,9 +101,7 @@ def _csv_to_dataframe(csv_file: io.TextIOWrapper) -> pl.DataFrame:
 
 
 def _add_missing_timestamps(
-    df: pl.DataFrame,
-    timeframe: str,
-    month: str,
+    df: pl.DataFrame, timeframe: str, month: str
 ) -> pl.DataFrame:
     """Adds any missing timestamps in the DataFrame.
 
@@ -127,12 +129,49 @@ def _add_missing_timestamps(
     return timestamps.join(df, on="timestamp", how="left")
 
 
-def _fetch_monthly_candles(
+def _get_cache_path(symbol: str, timeframe: str, month: str) -> str:
+    """Generates a file path for the cache file.
+
+    Args:
+        symbol (str): The trading pair symbol (e.g., "BTCUSDT").
+        timeframe (str): The timeframe (e.g., "1m").
+        month (str): The month in "YYYY-MM" format (e.g., "2024-12").
+
+    Returns:
+        str: The cache file path.
+    """
+    os.makedirs(_CACHE_DIR, exist_ok=True)
+    return os.path.join(_CACHE_DIR, f"{symbol}-{timeframe}-{month}.parquet")
+
+
+def _load_from_cache(cache_path: str) -> pl.DataFrame:
+    """Loads a Polars DataFrame from a cache file.
+
+    Args:
+        cache_path (str): The path to the cache file.
+
+    Returns:
+        pl.DataFrame: The cached DataFrame.
+    """
+    return pl.read_parquet(cache_path)
+
+
+def _save_to_cache(df: pl.DataFrame, cache_path: str) -> None:
+    """Saves a Polars DataFrame to a cache file.
+
+    Args:
+        df (pl.DataFrame): The DataFrame to save.
+        cache_path (str): The path to the cache file.
+    """
+    df.write_parquet(cache_path)
+
+
+def _fetch_data_from_source(
     symbol: str,
     timeframe: str,
     month: str,
 ) -> pl.DataFrame:
-    """Returns a single month of candles as a Polars DataFrame.
+    """Loads data from the source and returns it as a Polars DataFrame.
 
     Args:
         symbol (str): The trading pair symbol (e.g., "BTCUSDT").
@@ -146,7 +185,39 @@ def _fetch_monthly_candles(
     zip_content = _download_zip_file(url)
     csv_file = _extract_csv_from_zip(zip_content)
     df = _csv_to_dataframe(csv_file)
-    df = _add_missing_timestamps(df, timeframe, month)
+    return _add_missing_timestamps(df, timeframe, month)
+
+
+def _fetch_monthly_candles(
+    symbol: str,
+    timeframe: str,
+    month: str,
+    use_cache: bool = True,
+) -> pl.DataFrame:
+    """Returns a single month of candles as a Polars DataFrame.
+
+    Args:
+        symbol (str): The trading pair symbol (e.g., "BTCUSDT").
+        timeframe (str): The timeframe (e.g., "1m").
+        month (str): The month in "YYYY-MM" format (e.g., "2024-12").
+        use_cache (bool): Whether to use cache. Defaults to True.
+
+    Returns:
+        pl.DataFrame: The OHLCV data as a Polars DataFrame.
+    """
+    cache_path = _get_cache_path(symbol, timeframe, month)
+
+    # Load from cache if enabled and available
+    if use_cache and os.path.exists(cache_path):
+        return _load_from_cache(cache_path)
+
+    # Fetch data from source
+    df = _fetch_data_from_source(symbol, timeframe, month)
+
+    # Save to cache if enabled
+    if use_cache:
+        _save_to_cache(df, cache_path)
+
     return df
 
 
@@ -179,6 +250,7 @@ def fetch(
     timeframe: str,
     start: str,
     end: Optional[str] = None,
+    use_cache: bool = True,
 ) -> pl.DataFrame:
     """Returns multiple months of candles as a Polars DataFrame.
 
@@ -188,12 +260,19 @@ def fetch(
         start (str): Start month in "YYYY-MM" format (e.g., "2023-01").
         end (Optional[str]): End month in "YYYY-MM" format (e.g., "2023-12").
             If None, only the start month is returned.
+        use_cache (bool): Whether to use cache. Defaults to True.
 
     Returns:
         pl.DataFrame: The OHLCV data as a Polars DataFrame.
     """
     data = [
-        _fetch_monthly_candles(symbol, timeframe, month)
+        _fetch_monthly_candles(symbol, timeframe, month, use_cache)
         for month in _get_months(start, end)
     ]
     return pl.concat(data, how="vertical")
+
+
+def clear_cache() -> None:
+    """Clears the cache directory."""
+    if os.path.exists(_CACHE_DIR):
+        shutil.rmtree(_CACHE_DIR)
