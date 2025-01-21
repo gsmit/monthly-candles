@@ -101,7 +101,9 @@ def _csv_to_dataframe(csv_file: io.TextIOWrapper) -> pl.DataFrame:
 
 
 def _add_missing_timestamps(
-    df: pl.DataFrame, timeframe: str, month: str
+    df: pl.DataFrame,
+    timeframe: str,
+    month: str,
 ) -> pl.DataFrame:
     """Adds any missing timestamps in the DataFrame.
 
@@ -127,6 +129,20 @@ def _add_missing_timestamps(
     timestamps = pl.DataFrame({"timestamp": timestamp_range})
 
     return timestamps.join(df, on="timestamp", how="left")
+
+
+def _add_symbol_column(df: pl.DataFrame, symbol: str) -> pl.DataFrame:
+    """Adds a symbol column to the DataFrame.
+
+    Args:
+        df (pl.DataFrame): The input DataFrame.
+        symbol (str): The trading pair symbol (e.g., "BTCUSDT").
+
+    Returns:
+        pl.DataFrame: The DataFrame with the "symbol" column.
+    """
+    df = df.with_columns(pl.lit(symbol).alias("symbol"))
+    return df.select(["symbol"] + _COLUMNS)
 
 
 def _get_cache_path(symbol: str, timeframe: str, month: str) -> str:
@@ -185,7 +201,9 @@ def _fetch_data_from_source(
     zip_content = _download_zip_file(url)
     csv_file = _extract_csv_from_zip(zip_content)
     df = _csv_to_dataframe(csv_file)
-    return _add_missing_timestamps(df, timeframe, month)
+    df = _add_missing_timestamps(df, timeframe, month)
+    df = _add_symbol_column(df, symbol)
+    return df
 
 
 def _fetch_monthly_candles(
@@ -246,7 +264,7 @@ def _get_months(start: str, end: Optional[str] = None) -> list[str]:
 
 
 def fetch(
-    symbol: str,
+    symbols: str | list[str],
     timeframe: str,
     start: str,
     end: Optional[str] = None,
@@ -255,7 +273,7 @@ def fetch(
     """Returns multiple months of candles as a Polars DataFrame.
 
     Args:
-        symbol (str): The trading pair symbol (e.g., "BTCUSDT").
+        symbol (str | list[str]): The trading symbols (e.g., "BTCUSDT").
         timeframe (str): The timeframe (e.g., "1m").
         start (str): Start month in "YYYY-MM" format (e.g., "2023-01").
         end (Optional[str]): End month in "YYYY-MM" format (e.g., "2023-12").
@@ -265,11 +283,19 @@ def fetch(
     Returns:
         pl.DataFrame: The OHLCV data as a Polars DataFrame.
     """
-    data = [
-        _fetch_monthly_candles(symbol, timeframe, month, use_cache)
-        for month in _get_months(start, end)
-    ]
-    return pl.concat(data, how="vertical")
+    if isinstance(symbols, str):
+        symbols = [symbols]
+
+    months = _get_months(start, end)
+    candles = []
+
+    for symbol in symbols:
+        for month in months:
+            candles.append(
+                _fetch_monthly_candles(symbol, timeframe, month, use_cache)
+            )
+
+    return pl.concat(candles, how="vertical")
 
 
 def clear_cache() -> None:
