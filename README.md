@@ -13,7 +13,7 @@ pip install -e .
 To fetch some candles, simply run the following:
 ```python
 >>> from monthly_candles import fetch
->>> fetch("BTCUSDT", "1h", "2019-08", "2019-10")
+>>> fetch("BTCUSDT", timeframe="1h", start="2019-08", end="2019-10")
 shape: (2_208, 7)
 ┌─────────┬─────────────────────┬──────────┬──────────┬──────────┬──────────┬─────────────┐
 │ symbol  ┆ timestamp           ┆ open     ┆ high     ┆ low      ┆ close    ┆ volume      │
