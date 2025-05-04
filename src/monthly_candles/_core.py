@@ -1,3 +1,5 @@
+"""Functionality for fetching monthly candles."""
+
 import io
 import os
 import shutil
@@ -9,35 +11,14 @@ import polars as pl
 import requests
 from dateutil.relativedelta import relativedelta
 
+from monthly_candles._constants import (
+    BINANCE_KLINE_SCHEMA,
+    BINANCE_KLINE_URL,
+    LOCAL_CACHE_DIR,
+    OHLCV_COLUMNS,
+)
+
 __all__ = ["clear_cache", "fetch"]
-
-_BASE_URL = "https://data.binance.vision/data/spot/monthly/klines"
-
-_CACHE_DIR = ".monthly_candles"
-
-_SCHEMA = {
-    "timestamp": pl.Int64,
-    "open": pl.Float64,
-    "high": pl.Float64,
-    "low": pl.Float64,
-    "close": pl.Float64,
-    "volume": pl.Float64,
-    "close_time": pl.Int64,
-    "quote_asset_volume": pl.Float64,
-    "number_of_trades": pl.Int64,
-    "taker_buy_volume": pl.Float64,
-    "taker_buy_quote_asset_volume": pl.Float64,
-    "ignore": pl.Int64,
-}
-
-_COLUMNS = [
-    "timestamp",
-    "open",
-    "high",
-    "low",
-    "close",
-    "volume",
-]
 
 
 def _construct_url(symbol: str, timeframe: str, month: str) -> str:
@@ -52,7 +33,7 @@ def _construct_url(symbol: str, timeframe: str, month: str) -> str:
         str: The constructed URL.
     """
     file_name = f"{symbol}-{timeframe}-{month}.zip"
-    return f"{_BASE_URL}/{symbol}/{timeframe}/{file_name}"
+    return f"{BINANCE_KLINE_URL}/{symbol}/{timeframe}/{file_name}"
 
 
 def _download_zip_file(url: str) -> io.BytesIO:
@@ -95,9 +76,9 @@ def _csv_to_dataframe(csv_file: io.TextIOWrapper) -> pl.DataFrame:
     Returns:
         pl.DataFrame: The OHLCV data as a Polars DataFrame.
     """
-    df = pl.read_csv(csv_file, has_header=False, schema=_SCHEMA)
+    df = pl.read_csv(csv_file, has_header=False, schema=BINANCE_KLINE_SCHEMA)
     df = df.with_columns(pl.col("timestamp").cast(pl.Datetime("ms")))
-    return df.select(_COLUMNS)  # Keep OHLCV columns only
+    return df.select(OHLCV_COLUMNS)  # Keep OHLCV columns only
 
 
 def _add_missing_timestamps(
@@ -142,7 +123,7 @@ def _add_symbol_column(df: pl.DataFrame, symbol: str) -> pl.DataFrame:
         pl.DataFrame: The DataFrame with the "symbol" column.
     """
     df = df.with_columns(pl.lit(symbol).alias("symbol"))
-    return df.select(["symbol"] + _COLUMNS)
+    return df.select(["symbol"] + OHLCV_COLUMNS)
 
 
 def _get_cache_path(symbol: str, timeframe: str, month: str) -> str:
@@ -156,8 +137,9 @@ def _get_cache_path(symbol: str, timeframe: str, month: str) -> str:
     Returns:
         str: The cache file path.
     """
-    os.makedirs(_CACHE_DIR, exist_ok=True)
-    return os.path.join(_CACHE_DIR, f"{symbol}-{timeframe}-{month}.parquet")
+    os.makedirs(LOCAL_CACHE_DIR, exist_ok=True)
+    filename = f"{symbol}-{timeframe}-{month}.parquet"
+    return os.path.join(LOCAL_CACHE_DIR, filename)
 
 
 def _load_from_cache(cache_path: str) -> pl.DataFrame:
@@ -300,5 +282,5 @@ def fetch(
 
 def clear_cache() -> None:
     """Clears the cache directory."""
-    if os.path.exists(_CACHE_DIR):
-        shutil.rmtree(_CACHE_DIR)
+    if os.path.exists(LOCAL_CACHE_DIR):
+        shutil.rmtree(LOCAL_CACHE_DIR)
